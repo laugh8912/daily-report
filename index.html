@@ -96,3 +96,226 @@
         
         .btn-save-mini {
             background-color: #409EFF; color: white; border: none; padding: 8px 20px;
+            border-radius: 20px; font-size: 14px; cursor: pointer; float: right; margin-bottom: 10px;
+        }
+
+        .result-box {
+            margin-top: 20px; background: #f9fafc; border: 1px dashed #ccc; padding: 15px;
+            border-radius: 6px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; display: none;
+        }
+        .tip { font-size: 12px; color: #999; text-align: center; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="nav-tabs">
+        <div class="nav-item active" onclick="switchTab('weed')">🌱 杂草集</div>
+        <div class="nav-item" onclick="switchTab('daily')">写日报</div>
+        <div class="nav-item" onclick="switchTab('weekly')">生成周报</div>
+    </div>
+
+    <div id="tab-weed" class="content-section active">
+        <h2>🌱 思维杂草集</h2>
+        <div class="tip">这里的内容会永久保存，除非你删除它。</div>
+        
+        <button class="btn-save-mini" onclick="saveWeed()">💾 保存笔记</button>
+        <div style="clear:both;"></div>
+
+        <textarea id="weedText" rows="15" placeholder="在此处随意记录灵感、待办、会议纪要..."></textarea>
+        
+        <button class="main-btn btn-success" onclick="copyWeed()">一键复制笔记</button>
+    </div>
+
+    <div id="tab-daily" class="content-section">
+        <h2>📅 今日汇报</h2>
+        <div class="user-badge">当前用户：Stella</div>
+
+        <label>1. 今日计划 (打钩=完成)</label>
+        <div id="list-today" class="task-list"></div>
+        <button class="btn-add" onclick="addTask('list-today')">+ 添加任务</button>
+
+        <label>2. 计划外事项</label>
+        <textarea id="workExtra" rows="2" placeholder="无"></textarea>
+
+        <label>3. 明日计划</label>
+        <div id="list-tomorrow" class="task-list"></div>
+        <button class="btn-add" onclick="addTask('list-tomorrow')">+ 添加任务</button>
+
+        <label>4. 其他</label>
+        <textarea id="otherInfo" rows="2" placeholder="无"></textarea>
+
+        <button class="main-btn btn-primary" onclick="generateDaily()">生成并保存日报</button>
+        <div id="dailyResult" class="result-box"></div>
+        <button id="copyDailyBtn" class="main-btn btn-success" style="display:none" onclick="copyText('dailyResult')">复制内容</button>
+    </div>
+
+    <div id="tab-weekly" class="content-section">
+        <h2>📊 周工作总结</h2>
+        <p class="tip">选择日期范围，自动汇总过往日报</p>
+        
+        <label>开始日期</label>
+        <input type="date" id="startDate">
+        <label>结束日期</label>
+        <input type="date" id="endDate">
+
+        <button class="main-btn btn-warning" onclick="generateWeekly()">一键生成周报</button>
+        <div id="weeklyResult" class="result-box"></div>
+        <button id="copyWeeklyBtn" class="main-btn btn-success" style="display:none" onclick="copyText('weeklyResult')">复制内容</button>
+    </div>
+</div>
+
+<script>
+    var FIXED_NAME = "Stella"; 
+
+    // --- 初始化 ---
+    window.onload = function() {
+        // 1. 设置周报日期
+        var today = new Date();
+        document.getElementById('endDate').valueAsDate = today;
+        var lastWeek = new Date();
+        lastWeek.setDate(today.getDate() - 6);
+        document.getElementById('startDate').valueAsDate = lastWeek;
+
+        // 2. 初始化任务行
+        addTask('list-today');
+        addTask('list-tomorrow');
+
+        // 3. 读取杂草集的内容
+        var savedWeed = localStorage.getItem("weed_note_content");
+        if (savedWeed) {
+            document.getElementById("weedText").value = savedWeed;
+        }
+    };
+
+    // --- 切换标签页 (逻辑更新) ---
+    function switchTab(tabName) {
+        document.querySelectorAll('.content-section').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        
+        document.getElementById('tab-' + tabName).classList.add('active');
+        
+        // 更新高亮逻辑：0=杂草集, 1=日报, 2=周报
+        if(tabName === 'weed') document.querySelectorAll('.nav-item')[0].classList.add('active');
+        if(tabName === 'daily') document.querySelectorAll('.nav-item')[1].classList.add('active');
+        if(tabName === 'weekly') document.querySelectorAll('.nav-item')[2].classList.add('active');
+    }
+
+    // --- 杂草集逻辑 ---
+    function saveWeed() {
+        var content = document.getElementById("weedText").value;
+        localStorage.setItem("weed_note_content", content); 
+        alert("杂草集已保存！🍃");
+    }
+
+    function copyWeed() {
+        saveWeed(); // 复制前先保存
+        var text = document.getElementById("weedText").value;
+        if(!text) { alert("这里空空如也，没啥好复制的~"); return; }
+        
+        var tempInput = document.createElement("textarea");
+        tempInput.value = text;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+        alert("复制成功！");
+    }
+
+    // --- 日报逻辑 ---
+    function addTask(containerId) {
+        var container = document.getElementById(containerId);
+        var div = document.createElement("div");
+        div.className = "task-row";
+        div.innerHTML = `
+            <input type="checkbox" class="task-check">
+            <input type="text" class="task-input" placeholder="输入任务...">
+            <button class="btn-del" onclick="this.parentElement.remove()">×</button>
+        `;
+        container.appendChild(div);
+    }
+
+    function getListContent(containerId) {
+        var rows = document.getElementById(containerId).querySelectorAll(".task-row");
+        var result = [];
+        rows.forEach(row => {
+            var isChecked = row.querySelector(".task-check").checked;
+            var text = row.querySelector(".task-input").value.trim();
+            if (text) result.push((isChecked ? "☑ " : "☐ ") + text);
+        });
+        return result.length ? result.join("\n") : "无";
+    }
+
+    function generateDaily() {
+        var workPlanned = getListContent('list-today');
+        var planTomorrow = getListContent('list-tomorrow');
+        var workExtra = document.getElementById("workExtra").value || "无";
+        var otherInfo = document.getElementById("otherInfo").value || "无";
+
+        var now = new Date();
+        var dateStr = (now.getMonth() + 1) + "月" + now.getDate() + "日";
+        var dateKey = now.toISOString().split('T')[0]; 
+
+        var reportText = `【日报】${FIXED_NAME} ${dateStr}\n----------------\n` +
+                         `1.【今日计划】\n${workPlanned}\n\n` +
+                         `2.【计划外】\n${workExtra}\n\n` +
+                         `3.【明日计划】\n${planTomorrow}\n\n` +
+                         `4.【其他】\n${otherInfo}`;
+
+        var box = document.getElementById("dailyResult");
+        box.innerText = reportText;
+        box.style.display = "block";
+        document.getElementById("copyDailyBtn").style.display = "block";
+
+        var dailyData = { workPlanned, workExtra, planTomorrow, otherInfo };
+        localStorage.setItem("report_" + dateKey, JSON.stringify(dailyData));
+        alert("日报已保存！");
+    }
+
+    function generateWeekly() {
+        var startStr = document.getElementById("startDate").value;
+        var endStr = document.getElementById("endDate").value;
+        if (!startStr || !endStr) { alert("请选择日期范围"); return; }
+
+        var startDate = new Date(startStr);
+        var endDate = new Date(endStr);
+        var reportContent = `【周报总结】${FIXED_NAME}\n周期：${startStr} 至 ${endStr}\n====================\n`;
+        var currentLoop = new Date(startDate);
+        var foundAny = false;
+
+        while (currentLoop <= endDate) {
+            var keyDate = currentLoop.toISOString().split('T')[0];
+            var savedJson = localStorage.getItem("report_" + keyDate);
+            var displayDate = (currentLoop.getMonth()+1) + "." + currentLoop.getDate();
+
+            if (savedJson) {
+                foundAny = true;
+                var data = JSON.parse(savedJson);
+                reportContent += `\n📅 [${displayDate}]\n${data.workPlanned}\n`; 
+                if(data.workExtra !== "无") reportContent += `(计划外: ${data.workExtra})\n`;
+            }
+            currentLoop.setDate(currentLoop.getDate() + 1);
+        }
+        if (!foundAny) reportContent += "\n(未找到记录)\n";
+        else reportContent += `\n====================\n【下周计划】\n(请在此处补充)`;
+
+        var box = document.getElementById("weeklyResult");
+        box.innerText = reportContent;
+        box.style.display = "block";
+        document.getElementById("copyWeeklyBtn").style.display = "block";
+    }
+
+    function copyText(elementId) {
+        var text = document.getElementById(elementId).innerText;
+        var tempInput = document.createElement("textarea");
+        tempInput.value = text;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+        alert("复制成功！");
+    }
+</script>
+
+</body>
+</html>
