@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stella 日报助手 (清单版)</title>
+    <style>
+        /* 样式部分 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 15px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+            padding-bottom: 20px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: #eef1f6;
+            padding: 5px;
+        }
+        .nav-item {
+            flex: 1;
+            text-align: center;
+            padding: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #666;
+            border-radius: 8px;
+        }
+        .nav-item.active {
+            background: #fff;
+            color: #409EFF;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+
+        .content-section { display: none; padding: 20px; }
+        .content-section.active { display: block; }
+
+        h2 { text-align: center; color: #333; margin-top: 0; font-size: 1.2rem; }
+        .user-badge {
+            display: block; text-align: center; background: #e1f3d8; color: #67C23A;
+            font-size: 12px; padding: 4px; border-radius: 4px; width: fit-content; margin: 0 auto 15px auto;
+        }
+
+        label {
+            display: block; margin-top: 20px; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #555;
+        }
+
+        /* 任务列表样式 */
+        .task-list { margin-bottom: 10px; }
+        .task-row {
+            display: flex; align-items: center; margin-bottom: 8px;
+        }
+        .task-check {
+            width: 24px; height: 24px; margin-right: 8px; cursor: pointer;
+        }
+        .task-input {
+            flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; outline: none; font-size: 16px;
+        }
+        .task-input:focus { border-color: #409EFF; }
+        .btn-del {
+            background: #ffeded; color: #f56c6c; border: none; padding: 0 10px; margin-left: 5px;
+            border-radius: 6px; cursor: pointer; height: 40px; font-size: 18px; line-height: 1;
+        }
+
+        .btn-add {
+            background: #ecf5ff; color: #409EFF; border: 1px dashed #409EFF; width: 100%;
+            padding: 8px; border-radius: 6px; cursor: pointer; font-size: 14px; margin-bottom: 10px;
+        }
+
+        /* 普通文本框 (用于“计划外”和“其他”) */
+        textarea, input[type="date"] {
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px;
+            box-sizing: border-box; font-size: 16px; outline: none;
+        }
+
+        button.main-btn {
+            width: 100%; padding: 14px; margin-top: 20px; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: bold; cursor: pointer;
+        }
+        .btn-primary { background-color: #409EFF; color: white; }
+        .btn-success { background-color: #67C23A; color: white; display: none; margin-top: 10px;}
+        .btn-warning { background-color: #E6A23C; color: white; }
+
+        .result-box {
+            margin-top: 20px; background: #f9fafc; border: 1px dashed #ccc; padding: 15px;
+            border-radius: 6px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="nav-tabs">
+        <div class="nav-item active" onclick="switchTab('daily')">写日报</div>
+        <div class="nav-item" onclick="switchTab('weekly')">生成周报</div>
+    </div>
+
+    <div id="tab-daily" class="content-section active">
+        <h2>📅 今日汇报</h2>
+        <div class="user-badge">当前用户：Stella</div>
+
+        <label>1. 今日计划工作 (打钩代表完成)</label>
+        <div id="list-today" class="task-list"></div>
+        <button class="btn-add" onclick="addTask('list-today')">+ 添加一项任务</button>
+
+        <label>2. 今日计划外事项</label>
+        <textarea id="workExtra" rows="2" placeholder="临时插入了什么工作？（无则填无）"></textarea>
+
+        <label>3. 明日计划工作</label>
+        <div id="list-tomorrow" class="task-list"></div>
+        <button class="btn-add" onclick="addTask('list-tomorrow')">+ 添加一项任务</button>
+
+        <label>4. 其他</label>
+        <textarea id="otherInfo" rows="2" placeholder="需协调资源或遇到的困难..."></textarea>
+
+        <button class="main-btn btn-primary" onclick="generateDaily()">生成并保存日报</button>
+        
+        <div id="dailyResult" class="result-box"></div>
+        <button id="copyDailyBtn" class="main-btn btn-success" onclick="copyText('dailyResult')">复制日报内容</button>
+    </div>
+
+    <div id="tab-weekly" class="content-section">
+        <h2>📊 周工作总结</h2>
+        <div class="user-badge">当前用户：Stella</div>
+        
+        <label>开始日期</label>
+        <input type="date" id="startDate">
+        <label>结束日期</label>
+        <input type="date" id="endDate">
+
+        <button class="main-btn btn-warning" onclick="generateWeekly()">一键生成周报</button>
+
+        <div id="weeklyResult" class="result-box"></div>
+        <button id="copyWeeklyBtn" class="main-btn btn-success" onclick="copyText('weeklyResult')">复制周报内容</button>
+    </div>
+</div>
+
+<script>
+    var FIXED_NAME = "Stella"; 
+
+    // 初始化
+    window.onload = function() {
+        // 设置默认日期
+        var today = new Date();
+        document.getElementById('endDate').valueAsDate = today;
+        var lastWeek = new Date();
+        lastWeek.setDate(today.getDate() - 6);
+        document.getElementById('startDate').valueAsDate = lastWeek;
+
+        // 默认各添加一行空任务，方便直接输入
+        addTask('list-today');
+        addTask('list-tomorrow');
+    };
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.content-section').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-' + tabName).classList.add('active');
+        if(tabName === 'daily') document.querySelector('.nav-item:nth-child(1)').classList.add('active');
+        if(tabName === 'weekly') document.querySelector('.nav-item:nth-child(2)').classList.add('active');
+    }
+
+    // --- 任务清单逻辑 ---
+    
+    // 添加一行任务
+    function addTask(containerId) {
+        var container = document.getElementById(containerId);
+        var div = document.createElement("div");
+        div.className = "task-row";
+        div.innerHTML = `
+            <input type="checkbox" class="task-check">
+            <input type="text" class="task-input" placeholder="输入任务内容...">
+            <button class="btn-del" onclick="this.parentElement.remove()">×</button>
+        `;
+        container.appendChild(div);
+    }
+
+    // 读取清单内容并转化为带符号的文本
+    function getListContent(containerId) {
+        var container = document.getElementById(containerId);
+        var rows = container.querySelectorAll(".task-row");
+        var result = [];
+        
+        rows.forEach(row => {
+            var isChecked = row.querySelector(".task-check").checked;
+            var text = row.querySelector(".task-input").value.trim();
+            if (text) {
+                // 如果勾选了用 ☑，没勾选用 ☐
+                var icon = isChecked ? "☑ " : "☐ ";
+                result.push(icon + text);
+            }
+        });
+
+        if (result.length === 0) return "无";
+        return result.join("\n");
+    }
+
+    // --- 生成日报 ---
+    function generateDaily() {
+        // 获取数据
+        var workPlanned = getListContent('list-today');
+        var planTomorrow = getListContent('list-tomorrow');
+        
+        var workExtra = document.getElementById("workExtra").value || "无";
+        var otherInfo = document.getElementById("otherInfo").value || "无";
+
+        // 生成文本
+        var now = new Date();
+        var dateStr = (now.getMonth() + 1) + "月" + now.getDate() + "日";
+        var dateKey = now.toISOString().split('T')[0]; 
+
+        var reportText = `【日报】${FIXED_NAME} ${dateStr}\n` +
+                         `----------------\n` +
+                         `1.【今日计划工作】\n${workPlanned}\n\n` +
+                         `2.【今日计划外事项】\n${workExtra}\n\n` +
+                         `3.【明日计划工作】\n${planTomorrow}\n\n` +
+                         `4.【其他】\n${otherInfo}`;
+
+        // 显示
+        var box = document.getElementById("dailyResult");
+        box.innerText = reportText;
+        box.style.display = "block";
+        document.getElementById("copyDailyBtn").style.display = "block";
+
+        // 保存（注意：这里直接保存生成的带符号字符串，这样周报功能不需要修改就能直接读取符号）
+        var dailyData = {
+            workPlanned: workPlanned,
+            workExtra: workExtra,
+            planTomorrow: planTomorrow,
+            otherInfo: otherInfo
+        };
+        localStorage.setItem("report_" + dateKey, JSON.stringify(dailyData));
+        alert("日报已保存！");
+    }
+
+    // --- 生成周报 (保持逻辑不变) ---
+    function generateWeekly() {
+        var startStr = document.getElementById("startDate").value;
+        var endStr = document.getElementById("endDate").value;
+        if (!startStr || !endStr) { alert("请选择日期范围"); return; }
+
+        var startDate = new Date(startStr);
+        var endDate = new Date(endStr);
+        var reportContent = `【周报总结】${FIXED_NAME}\n周期：${startStr} 至 ${endStr}\n====================\n`;
+
+        var currentLoop = new Date(startDate);
+        var foundAny = false;
+
+        while (currentLoop <= endDate) {
+            var keyDate = currentLoop.toISOString().split('T')[0];
+            var savedJson = localStorage.getItem("report_" + keyDate);
+            var displayDate = (currentLoop.getMonth()+1) + "." + currentLoop.getDate();
+
+            if (savedJson) {
+                foundAny = true;
+                var data = JSON.parse(savedJson);
+                reportContent += `\n📅 [${displayDate} 工作记录]\n`;
+                // 这里读取到的已经是带 ☑ 或 ☐ 的文本了
+                reportContent += `${data.workPlanned}\n`; 
+                if(data.workExtra !== "无") reportContent += `(计划外: ${data.workExtra})\n`;
+            }
+            currentLoop.setDate(currentLoop.getDate() + 1);
+        }
+
+        if (!foundAny) {
+            reportContent += "\n(未找到此期间的日报记录)\n";
+        } else {
+            reportContent += `\n====================\n【下周计划】\n(请在此处补充下周重点)`;
+        }
+
+        var box = document.getElementById("weeklyResult");
+        box.innerText = reportContent;
+        box.style.display = "block";
+        document.getElementById("copyWeeklyBtn").style.display = "block";
+    }
+
+    function copyText(elementId) {
+        var text = document.getElementById(elementId).innerText;
+        var tempInput = document.createElement("textarea");
+        tempInput.value = text;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+        alert("复制成功！");
+    }
+</script>
+
+</body>
+</html>
